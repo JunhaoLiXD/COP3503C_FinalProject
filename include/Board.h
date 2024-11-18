@@ -12,6 +12,7 @@ private:
     int numRows;
     int numCols;
     int numMines;
+    int flagCount;
 
     bool gameOver;
     bool victory;
@@ -21,6 +22,7 @@ public:
     void initializeBoard();
     int getRow();
     int getCol();
+    int getRemainingMines();
     bool revealTile(int row, int col);
     void toggleFlag(int row, int col);
     void calculateAdjacentMines();

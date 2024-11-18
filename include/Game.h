@@ -3,23 +3,28 @@
 
 #include "Board.h"
 #include <SFML/Graphics.hpp>
+#include <vector>
 
 
 class Game {
 private:
-    sf::RenderWindow window;
     Board board;
     int tileSize;
-    sf::Texture hiddenTexture, revealedTexture, mineTexture, flagTexture;
+    bool isPaused;
+    vector<sf::Texture> numberTextures;
+    sf::Texture hiddenTexture, revealedTexture, mineTexture, flagTexture, digitsTexture;
     sf::Font font;
     sf::Text timerText;
-    bool isPaused;
     sf::Clock gameClock;
+    sf::RenderWindow window;
 
     void handleEvents();
     void update();
     void render();
     void loadResources();
+    sf::Sprite createDigitSprite(int digit, int xPosition, int yPosition);
+    void drawNumber(int number, int xPosition, int yPosition, sf::RenderWindow& window);
+
 
 public:
     Game();

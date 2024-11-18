@@ -1,6 +1,8 @@
 #include "../include/Game.h"
 #include <SFML/Graphics.hpp>
 #include <iostream>
+#include <sstream>
+#include <iomanip>
 
 using namespace std;
 
@@ -20,9 +22,21 @@ void Game::loadResources() {
        !revealedTexture.loadFromFile("files/images/tile_revealed.png")||
        !mineTexture.loadFromFile("files/images/mine.png")||
        !flagTexture.loadFromFile("files/images/flag.png")||
+       !digitsTexture.loadFromFile("files/images/digits.png")||
        !font.loadFromFile("files/font.ttf")) {
         cerr << "Failed to load resources!" << endl;
         exit(1);
+    }
+
+
+    for(int i = 1; i < 8; i++) {
+        sf::Texture texture;
+        string filepath = "files/images/number_" + to_string(i) + ".png";
+        if(!texture.loadFromFile(filepath)) {
+            cerr << "Failed to load resources!" << endl;
+            exit(1);
+        }
+        numberTextures.push_back(texture);
     }
 }
 
@@ -53,6 +67,38 @@ void Game::handleEvents() {
     }
 }
 
+void Game::drawNumber(int number, int xPosition, int yPosition, sf::RenderWindow& window) {
+    ostringstream oss;
+    oss << setw(3) << setfill('0') << number;
+    std::string numberStr = oss.str();
+
+    int digitWidth = 21;
+    int digitHeight = 32;
+
+    int offsetX = 0;
+
+    if (number < 0) {
+        sf::Sprite minusSprite;
+        minusSprite.setTexture(digitsTexture);
+        minusSprite.setTextureRect(sf::IntRect(10 * digitWidth, 0, digitWidth, digitHeight)); // 假设负号在第 10 位
+        minusSprite.setPosition(xPosition + offsetX, yPosition);
+        window.draw(minusSprite);
+        offsetX += digitWidth;
+    }
+
+    for (int i = (number < 0 ? 1 : 0); i < numberStr.size(); i++) {
+        int digit = numberStr[i] - '0';
+        sf::Sprite digitSprite;
+        digitSprite.setTexture(digitsTexture);
+        digitSprite.setTextureRect(sf::IntRect(digit * digitWidth, 0, digitWidth, digitHeight));
+        digitSprite.setPosition(xPosition + offsetX, yPosition);
+        window.draw(digitSprite);
+        offsetX += digitWidth;
+    }
+}
+
+
+
 void Game::update() {
     if(!isPaused) {
         sf::Time elapsed = gameClock.getElapsedTime();
@@ -68,45 +114,69 @@ void Game::update() {
 void Game::render() {
     window.clear(sf::Color::White);
 
-    for(int row = 0; row < board.getRow(); row++) {
-        for(int col = 0; col < board.getCol(); col++) {
+    for (int row = 0; row < board.getRow(); row++) {
+        for (int col = 0; col < board.getCol(); col++) {
             sf::Sprite tileSprite;
-            if(board.getTile(row, col).isTileRevealed()) {
-                if(board.getTile(row, col).hasMine()) {
-                    tileSprite.setTexture(mineTexture);
-                }
-                else {
-                    tileSprite.setTexture(revealedTexture);
+
+            const Tile& tile = board.getTile(row, col);
+
+            if (!tile.isTileRevealed()) {
+                tileSprite.setTexture(hiddenTexture);
+                tileSprite.setPosition(col * tileSize, row * tileSize);
+                window.draw(tileSprite);
+
+                if (tile.isTileFlagged()) {
+                    sf::Sprite flagSprite;
+                    flagSprite.setTexture(flagTexture);
+                    flagSprite.setPosition(col * tileSize, row * tileSize);
+                    window.draw(flagSprite);
                 }
             }
             else {
-                if(board.getTile(row, col).isTileFlagged()) {
-                    tileSprite.setTexture(flagTexture);
+                tileSprite.setTexture(revealedTexture);
+                tileSprite.setPosition(col * tileSize, row * tileSize);
+                window.draw(tileSprite);
+                if (tile.hasMine()) {
+                    sf::Sprite mineSprite;
+                    mineSprite.setTexture(mineTexture);
+                    mineSprite.setPosition(col * tileSize, row * tileSize);
+                    window.draw(mineSprite);
                 }
-                else {
-                    tileSprite.setTexture(hiddenTexture);
+
+                else if (!tile.hasMine()) {
+                    int adjacentMines = tile.getAdjacentMines();
+                    if (adjacentMines > 0 && adjacentMines <= 8) {
+                        sf::Sprite numberSprite;
+                        numberSprite.setTexture(numberTextures[adjacentMines - 1]);
+                        numberSprite.setPosition(col * tileSize, row * tileSize);
+                        window.draw(numberSprite);
+                    }
                 }
             }
-            tileSprite.setPosition(col * tileSize, row * tileSize);
-            window.draw(tileSprite);
         }
     }
 
-    window.draw(timerText);
+    int elapsedTime = static_cast<int>(gameClock.getElapsedTime().asSeconds());
+    drawNumber(elapsedTime, 10, 550, window);
+
+    int remainingMines = board.getRemainingMines();
+    drawNumber(remainingMines, 200, 550, window);
+
     window.display();
 }
 
 
 // class Game {
 // private:
-//     sf::RenderWindow* window;
 //     Board board;
 //     int tileSize;
-//     sf::Texture hiddenTexture, revealedTexture, mineTexture, flagTexture;
+//     bool isPaused;
+//     vector<sf::Texture> numberTextures;
+//     sf::Texture hiddenTexture, revealedTexture, mineTexture, flagTexture, digitsTexture;
 //     sf::Font font;
 //     sf::Text timerText;
-//     bool isPaused;
 //     sf::Clock gameClock;
+//     sf::RenderWindow window;
 //
 //     void handleEvents();
 //     void update();

@@ -4,7 +4,7 @@
 #include<random>
 
 Board::Board(const int rows, const int cols, const int mines):
-numRows(rows), numCols(cols), numMines(mines), gameOver(false), victory(false) {initializeBoard();}
+numRows(rows), numCols(cols), numMines(mines), flagCount(0), gameOver(false), victory(false) {initializeBoard();}
 
 void Board::initializeBoard() {
     tiles = vector<vector<Tile>>(numRows, vector<Tile>(numCols));
@@ -84,8 +84,21 @@ bool Board::revealTile(int row, int col) {
 
 void Board::toggleFlag(int row, int col) {
     if(row >= 0 && row < numRows && col >= 0 && col < numCols && !tiles[row][col].isTileRevealed()) {
-        tiles[row][col].toggleFlag();
+        Tile& tile = tiles[row][col];
+
+        if(tile.isTileFlagged()) {
+            tile.toggleFlag();
+            flagCount--;
+        }
+        else {
+            tile.toggleFlag();
+            flagCount++;
+        }
     }
+}
+
+int Board::getRemainingMines() {
+    return numMines - flagCount;
 }
 
 bool Board::checkVictory() {
@@ -104,9 +117,8 @@ bool Board::checkVictory() {
 
 void Board::reset() {
     tiles.clear();
-
     initializeBoard();
-
+    flagCount = 0;
     gameOver = false;
     victory = false;
 }
