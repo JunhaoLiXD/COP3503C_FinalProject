@@ -102,10 +102,15 @@ int Board::getRemainingMines() {
 }
 
 bool Board::checkVictory() {
-    // Check if any non-mine tile remains unrevealed; if so, the game is not yet won.
-    for(int row = 0; row < numRows; row++) {
-        for(int col = 0; col < numCols; col++) {
-            if(!tiles[row][col].hasMine() && !tiles[row][col].isTileRevealed()) {
+    for (int row = 0; row < numRows; row++) {
+        for (int col = 0; col < numCols; col++) {
+            const Tile& tile = tiles[row][col];
+
+            if (!tile.hasMine() && !tile.isTileRevealed()) {
+                return false;
+            }
+
+            if (tile.hasMine() && !tile.isTileFlagged()) {
                 return false;
             }
         }
@@ -113,6 +118,10 @@ bool Board::checkVictory() {
 
     victory = true;
     return true;
+}
+
+bool Board::isGameOver() {
+    return gameOver;
 }
 
 void Board::reset() {

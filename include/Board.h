@@ -13,7 +13,6 @@ private:
     int numCols;
     int numMines;
     int flagCount;
-
     bool gameOver;
     bool victory;
 
@@ -28,6 +27,7 @@ public:
     void calculateAdjacentMines();
     void reset();
     bool checkVictory();
+    bool isGameOver();
     void printBoard(bool debugMode) const;
 
     Tile& getTile(int row, int col);

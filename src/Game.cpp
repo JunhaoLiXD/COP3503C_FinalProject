@@ -1,20 +1,21 @@
 #include "../include/Game.h"
+#include "../include/WelcomeWindow.h"
 #include <SFML/Graphics.hpp>
 #include <iostream>
 #include <sstream>
 #include <iomanip>
 
+
 using namespace std;
 
-Game::Game(): board(16, 25, 50), tileSize(32), isPaused(false) {
-    window.create(sf::VideoMode(800, 600), "Minesweeper");
+Game::Game(): board(16, 25, 2), tileSize(32), isPaused(false), elapsedTime(0){
+    minutesX = (board.getCol() * 32) - 97;
+    secondsX = (board.getCol() * 32) - 54;
+    timerY = (board.getRow() * 32) + 16;
 
-    loadResources();
-
-    timerText.setFont(font);
-    timerText.setCharacterSize(24);
-    timerText.setColor(sf::Color::Black);
-    timerText.setPosition(10, 10);
+    float buttonX = (board.getCol() * 32) / 2.0f - 16;
+    float buttonY = (board.getRow() * 32) + 16;
+    happyFaceButton.setPosition(buttonX, buttonY);
 }
 
 void Game::loadResources() {
@@ -23,6 +24,9 @@ void Game::loadResources() {
        !mineTexture.loadFromFile("files/images/mine.png")||
        !flagTexture.loadFromFile("files/images/flag.png")||
        !digitsTexture.loadFromFile("files/images/digits.png")||
+       !happyFaceTexture.loadFromFile("files/images/face_happy.png")||
+       !loseFaceTexture.loadFromFile("files/images/face_lose.png")||
+       !winFaceTexture.loadFromFile("files/images/face_win.png")||
        !font.loadFromFile("files/font.ttf")) {
         cerr << "Failed to load resources!" << endl;
         exit(1);
@@ -38,14 +42,39 @@ void Game::loadResources() {
         }
         numberTextures.push_back(texture);
     }
+
+    happyFaceButton.setTexture(happyFaceTexture);
 }
 
 void Game::run() {
+    WelcomeWindow welcomWindow;
+    string playerName = welcomWindow.run();
+
+    if(!playerName.empty()) {
+        cout << "Player name: " << playerName << endl;
+    }
+    else {
+        cout << "Player does not exist!" << endl;
+        return;
+    }
+
+    startTime = chrono::steady_clock::now();
+    window.create(sf::VideoMode(800, 600), "Minesweeper");
+    loadResources();
+
     while(window.isOpen()) {
         handleEvents();
         update();
         render();
     }
+}
+
+void Game::resetGame() {
+    board.reset();
+    isPaused = false;
+    elapsedTime = 0;
+    startTime = chrono::steady_clock::now();
+    happyFaceButton.setTexture(happyFaceTexture);
 }
 
 void Game::handleEvents() {
@@ -54,9 +83,23 @@ void Game::handleEvents() {
         if(event.type == sf::Event::Closed) {
             window.close();
         }
-        else if(event.type == sf::Event::MouseButtonPressed) {
-            int row = event.mouseButton.y / tileSize;
-            int col = event.mouseButton.x / tileSize;
+
+        if(event.type == sf::Event::MouseButtonPressed) {
+            int mouseX = event.mouseButton.x;
+            int mouseY = event.mouseButton.y;
+
+            if(happyFaceButton.getGlobalBounds().contains(mouseX, mouseY)) {
+                resetGame();
+                return;
+            }
+
+            if(isPaused) {
+                continue;
+            }
+
+            int row = mouseY / tileSize;
+            int col = mouseX / tileSize;
+
             if(event.mouseButton.button == sf::Mouse::Left) {
                 board.revealTile(row, col);
             }
@@ -67,9 +110,9 @@ void Game::handleEvents() {
     }
 }
 
-void Game::drawNumber(int number, int xPosition, int yPosition, sf::RenderWindow& window) {
+void Game::drawNumber(int number, int xPosition, int yPosition, int digitCount, sf::RenderWindow& window) {
     ostringstream oss;
-    oss << setw(3) << setfill('0') << number;
+    oss << setw(digitCount) << setfill('0') << number;
     std::string numberStr = oss.str();
 
     int digitWidth = 21;
@@ -80,7 +123,7 @@ void Game::drawNumber(int number, int xPosition, int yPosition, sf::RenderWindow
     if (number < 0) {
         sf::Sprite minusSprite;
         minusSprite.setTexture(digitsTexture);
-        minusSprite.setTextureRect(sf::IntRect(10 * digitWidth, 0, digitWidth, digitHeight)); // 假设负号在第 10 位
+        minusSprite.setTextureRect(sf::IntRect(10 * digitWidth, 0, digitWidth, digitHeight));
         minusSprite.setPosition(xPosition + offsetX, yPosition);
         window.draw(minusSprite);
         offsetX += digitWidth;
@@ -97,17 +140,31 @@ void Game::drawNumber(int number, int xPosition, int yPosition, sf::RenderWindow
     }
 }
 
-
-
 void Game::update() {
-    if(!isPaused) {
-        sf::Time elapsed = gameClock.getElapsedTime();
-        timerText.setString("Time: " + to_string(static_cast<int>(elapsed.asSeconds())));
+    if(isPaused) {
+        return;
     }
 
+    auto currentTime = chrono::steady_clock::now();
+    elapsedTime = chrono::duration_cast<chrono::seconds>(currentTime - startTime).count();
+
     if(board.checkVictory()) {
-        cout << "Victory!" << endl;
         isPaused = true;
+        happyFaceButton.setTexture(winFaceTexture);
+        return;
+    }
+
+    if(board.isGameOver()) {
+        for(int row = 0; row < board.getRow(); row++) {
+            for(int col = 0; col < board.getCol(); col++) {
+                Tile& tile = board.getTile(row, col);
+                if(tile.hasMine()) {
+                    tile.reveal();
+                }
+            }
+        }
+        isPaused = true;
+        happyFaceButton.setTexture(loseFaceTexture);
     }
 }
 
@@ -117,7 +174,6 @@ void Game::render() {
     for (int row = 0; row < board.getRow(); row++) {
         for (int col = 0; col < board.getCol(); col++) {
             sf::Sprite tileSprite;
-
             const Tile& tile = board.getTile(row, col);
 
             if (!tile.isTileRevealed()) {
@@ -131,18 +187,24 @@ void Game::render() {
                     flagSprite.setPosition(col * tileSize, row * tileSize);
                     window.draw(flagSprite);
                 }
+                if (board.isGameOver() && tile.hasMine()) {
+                    sf::Sprite mineSprite;
+                    mineSprite.setTexture(mineTexture);
+                    mineSprite.setPosition(col * tileSize, row * tileSize);
+                    window.draw(mineSprite);
+                }
             }
             else {
                 tileSprite.setTexture(revealedTexture);
                 tileSprite.setPosition(col * tileSize, row * tileSize);
                 window.draw(tileSprite);
+
                 if (tile.hasMine()) {
                     sf::Sprite mineSprite;
                     mineSprite.setTexture(mineTexture);
                     mineSprite.setPosition(col * tileSize, row * tileSize);
                     window.draw(mineSprite);
                 }
-
                 else if (!tile.hasMine()) {
                     int adjacentMines = tile.getAdjacentMines();
                     if (adjacentMines > 0 && adjacentMines <= 8) {
@@ -156,12 +218,15 @@ void Game::render() {
         }
     }
 
-    int elapsedTime = static_cast<int>(gameClock.getElapsedTime().asSeconds());
-    drawNumber(elapsedTime, 10, 550, window);
+    int minutes = elapsedTime / 60;
+    int seconds = elapsedTime % 60;
+    drawNumber(minutes, minutesX, timerY, 2, window);
+    drawNumber(seconds, secondsX, timerY, 2, window);
 
     int remainingMines = board.getRemainingMines();
-    drawNumber(remainingMines, 200, 550, window);
+    drawNumber(remainingMines, 33, timerY, 3, window);
 
+    window.draw(happyFaceButton);
     window.display();
 }
 
@@ -174,7 +239,6 @@ void Game::render() {
 //     vector<sf::Texture> numberTextures;
 //     sf::Texture hiddenTexture, revealedTexture, mineTexture, flagTexture, digitsTexture;
 //     sf::Font font;
-//     sf::Text timerText;
 //     sf::Clock gameClock;
 //     sf::RenderWindow window;
 //
