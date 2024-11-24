@@ -4,11 +4,12 @@
 #include <iostream>
 #include <sstream>
 #include <iomanip>
-
+#include <fstream>
 
 using namespace std;
 
-Game::Game(): board(16, 25, 2), tileSize(32), isPaused(false), elapsedTime(0){
+Game::Game(): board(16, 25, 2), tileSize(32), isPaused(false), isVictory(false), isManuallyPaused(false),
+                elapsedTime(0), pausedDuration(chrono::seconds(0)){
     minutesX = (board.getCol() * 32) - 97;
     secondsX = (board.getCol() * 32) - 54;
     timerY = (board.getRow() * 32) + 16;
@@ -16,6 +17,14 @@ Game::Game(): board(16, 25, 2), tileSize(32), isPaused(false), elapsedTime(0){
     float buttonX = (board.getCol() * 32) / 2.0f - 16;
     float buttonY = (board.getRow() * 32) + 16;
     happyFaceButton.setPosition(buttonX, buttonY);
+
+    float leaderBoardButtonX = (board.getCol() * 32) / 2.0f + 48;
+    float leaderBoardButtonY = (board.getRow() * 32) + 16;
+    leaderBoardButton.setPosition(leaderBoardButtonX, leaderBoardButtonY);
+
+    float pausePlayButtonX = (board.getCol() * 32) / 2.0f + 112;
+    float pausePlayButtonY = (board.getRow() * 32) + 16;
+    pausePlayButton.setPosition(pausePlayButtonX, pausePlayButtonY);
 }
 
 void Game::loadResources() {
@@ -27,6 +36,9 @@ void Game::loadResources() {
        !happyFaceTexture.loadFromFile("files/images/face_happy.png")||
        !loseFaceTexture.loadFromFile("files/images/face_lose.png")||
        !winFaceTexture.loadFromFile("files/images/face_win.png")||
+       !leaderBoardTexture.loadFromFile("files/images/leaderboard.png")||
+       !pauseButtonTexture.loadFromFile("files/images/pause.png")||
+       !playButtonTexture.loadFromFile("files/images/play.png")||
        !font.loadFromFile("files/font.ttf")) {
         cerr << "Failed to load resources!" << endl;
         exit(1);
@@ -44,19 +56,13 @@ void Game::loadResources() {
     }
 
     happyFaceButton.setTexture(happyFaceTexture);
+    leaderBoardButton.setTexture(leaderBoardTexture);
+    pausePlayButton.setTexture(pauseButtonTexture);
 }
 
 void Game::run() {
     WelcomeWindow welcomWindow;
-    string playerName = welcomWindow.run();
-
-    if(!playerName.empty()) {
-        cout << "Player name: " << playerName << endl;
-    }
-    else {
-        cout << "Player does not exist!" << endl;
-        return;
-    }
+    playerName = welcomWindow.run();
 
     startTime = chrono::steady_clock::now();
     window.create(sf::VideoMode(800, 600), "Minesweeper");
@@ -72,9 +78,13 @@ void Game::run() {
 void Game::resetGame() {
     board.reset();
     isPaused = false;
+    isManuallyPaused = false;
+    isVictory = false;
     elapsedTime = 0;
     startTime = chrono::steady_clock::now();
+    pausedDuration = chrono::seconds(0);
     happyFaceButton.setTexture(happyFaceTexture);
+    pausePlayButton.setTexture(pauseButtonTexture);
 }
 
 void Game::handleEvents() {
@@ -88,12 +98,32 @@ void Game::handleEvents() {
             int mouseX = event.mouseButton.x;
             int mouseY = event.mouseButton.y;
 
+            if (pausePlayButton.getGlobalBounds().contains(mouseX, mouseY)) {
+                if (!isVictory && !board.isGameOver()) {
+                    isManuallyPaused = !isManuallyPaused;
+                    if (isManuallyPaused) {
+                        pausePlayButton.setTexture(playButtonTexture);
+                        pauseStartTime = chrono::steady_clock::now();
+                    }
+                    else {
+                        pausePlayButton.setTexture(pauseButtonTexture);
+                        pausedDuration = chrono::duration_cast<chrono::seconds>(chrono::steady_clock::now() - pauseStartTime);
+                    }
+                }
+                return;
+            }
+
             if(happyFaceButton.getGlobalBounds().contains(mouseX, mouseY)) {
                 resetGame();
                 return;
             }
 
-            if(isPaused) {
+            if (leaderBoardButton.getGlobalBounds().contains(mouseX, mouseY)) {
+                showLeaderBoard();
+                return;
+            }
+
+            if(isPaused || isManuallyPaused) {
                 continue;
             }
 
@@ -140,17 +170,158 @@ void Game::drawNumber(int number, int xPosition, int yPosition, int digitCount, 
     }
 }
 
+void Game::showLeaderBoard() {
+    isLeaderBoardOpen = true;
+    isPaused = true;
+    pauseStartTime = chrono::steady_clock::now();
+
+    for (int row = 0; row < board.getRow(); row++) {
+        for (int col = 0; col < board.getCol(); col++) {
+            sf::Sprite tileSprite;
+            tileSprite.setTexture(revealedTexture);
+            tileSprite.setPosition(col * tileSize, row * tileSize);
+            window.draw(tileSprite);
+        }
+    }
+    if (isVictory) {
+        happyFaceButton.setTexture(winFaceTexture);
+        window.draw(happyFaceButton);
+    }
+
+    window.display();
+
+    sf::RenderWindow leaderboardWindow(sf::VideoMode(300, 400), "Minesweeper");
+    font.loadFromFile("files/font.ttf");
+
+    vector<pair<string, string>> leaderboard;
+    ifstream infile(leaderboardFile);
+    string time, name;
+
+    while (infile >> time >> name) {
+        leaderboard.emplace_back(time, name);
+    }
+    infile.close();
+
+    sort(leaderboard.begin(), leaderboard.end());
+
+    vector<sf::Text> entries;
+    for (int i = 0; i < 5; i++) {
+
+        ostringstream formattedEntry;
+        if(leaderboard[i].second == playerName && isVictory) {
+            formattedEntry << i+1 << ".   " << leaderboard[i].first << "   " << leaderboard[i].second << "*";
+        }
+        else {
+            formattedEntry << i+2 << ".   " << leaderboard[i].first << "   " << leaderboard[i].second;
+        }
+
+        sf::Text text(formattedEntry.str(), font, 20);
+        text.setFillColor(sf::Color::White);
+        text.setPosition(40, 80 + i * 40);
+        entries.push_back(text);
+    }
+
+    sf::Text title("LEADERBOARD", font, 30);
+    title.setFillColor(sf::Color::White);
+    title.setStyle(sf::Text::Bold | sf::Text::Underlined);
+    title.setPosition(60, 20);
+
+    sf::RectangleShape background(sf::Vector2f(300, 400));
+    background.setFillColor(sf::Color(0, 0, 255));
+
+    while (leaderboardWindow.isOpen()) {
+        sf::Event event;
+        while (leaderboardWindow.pollEvent(event)) {
+            if (event.type == sf::Event::Closed) {
+                leaderboardWindow.close();
+            }
+        }
+
+        leaderboardWindow.clear();
+        leaderboardWindow.draw(background);
+        leaderboardWindow.draw(title);
+        for (int i = 0; i < entries.size(); i++) {
+            leaderboardWindow.draw(entries[i]);
+        }
+        leaderboardWindow.display();
+    }
+
+    isLeaderBoardOpen = false;
+    isPaused = false;
+    pausedDuration += chrono::duration_cast<chrono::seconds>(chrono::steady_clock::now() - pauseStartTime);
+}
+
+void Game::textToFile() {
+    int minutes = elapsedTime / 60;
+    int seconds = elapsedTime % 60;
+    ostringstream formattedTime;
+    formattedTime << setw(2) << setfill('0') << minutes << ":"
+                  << setw(2) << setfill('0') << seconds;
+
+    vector<pair<string, string>> leaderboard;
+
+    ifstream infile(leaderboardFile);
+    if (infile.is_open()) {
+        string time, name;
+        while (infile >> time >> name) {
+            leaderboard.emplace_back(time, name);
+        }
+        infile.close();
+    } else {
+        cerr << "Failed to open leaderboard file for reading!" << endl;
+    }
+
+    bool updated = false;
+    for (auto& entry : leaderboard) {
+        if (entry.second == playerName) {
+            if (formattedTime.str() < entry.first) {
+                entry.first = formattedTime.str();
+            }
+            updated = true;
+            break;
+        }
+    }
+
+    if (!updated) {
+        leaderboard.emplace_back(formattedTime.str(), playerName);
+    }
+
+    sort(leaderboard.begin(), leaderboard.end(), [](const pair<string, string>& a, const pair<string, string>& b) {
+        return a.first < b.first;
+    });
+
+    ofstream outfile(leaderboardFile);
+    if (outfile.is_open()) {
+        int count = 0;
+        for (const auto& entry : leaderboard) {
+            if (count++ >= 5) break;
+            outfile << entry.first << " " << entry.second << endl;
+        }
+        outfile.close();
+    } else {
+        cerr << "Failed to open leaderboard file for writing!" << endl;
+    }
+}
+
+
 void Game::update() {
-    if(isPaused) {
+    if(isVictory) {
+        return;
+    }
+
+    if(isPaused || isManuallyPaused) {
         return;
     }
 
     auto currentTime = chrono::steady_clock::now();
-    elapsedTime = chrono::duration_cast<chrono::seconds>(currentTime - startTime).count();
+    elapsedTime = chrono::duration_cast<chrono::seconds>(currentTime - startTime - pausedDuration).count();
+
 
     if(board.checkVictory()) {
         isPaused = true;
-        happyFaceButton.setTexture(winFaceTexture);
+        isVictory = true;
+        textToFile();
+        showLeaderBoard();
         return;
     }
 
@@ -227,6 +398,8 @@ void Game::render() {
     drawNumber(remainingMines, 33, timerY, 3, window);
 
     window.draw(happyFaceButton);
+    window.draw(leaderBoardButton);
+    window.draw(pausePlayButton);
     window.display();
 }
 
