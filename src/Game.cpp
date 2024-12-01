@@ -8,23 +8,48 @@
 
 using namespace std;
 
-Game::Game(): board(16, 25, 2), tileSize(32), isPaused(false), isVictory(false), isManuallyPaused(false),
-                elapsedTime(0), pausedDuration(chrono::seconds(0)){
+Game::Game() : tileSize(32), isPaused(false), isVictory(false), isManuallyPaused(false), isDebugMode(false),
+                isLeaderBoardOpen(false), elapsedTime(0), pausedDuration(chrono::seconds(0)){
+
+    loadConfig("files/config.cfg");
+
+    board.initializeBoard(rows, cols, mines);
+
     minutesX = (board.getCol() * 32) - 97;
     secondsX = (board.getCol() * 32) - 54;
-    timerY = (board.getRow() * 32) + 16;
+    timerY = (board.getRow() + 0.5) * 32 + 16;
 
-    float buttonX = (board.getCol() * 32) / 2.0f - 16;
-    float buttonY = (board.getRow() * 32) + 16;
+    float buttonX = (board.getCol() * 32) / 2.0f - 32;
+    float buttonY = (board.getRow()+0.5) * 32;
     happyFaceButton.setPosition(buttonX, buttonY);
 
-    float leaderBoardButtonX = (board.getCol() * 32) / 2.0f + 48;
-    float leaderBoardButtonY = (board.getRow() * 32) + 16;
+    float leaderBoardButtonX = (board.getCol() * 32) - 176;
+    float leaderBoardButtonY = (board.getRow()+0.5) * 32;
     leaderBoardButton.setPosition(leaderBoardButtonX, leaderBoardButtonY);
 
-    float pausePlayButtonX = (board.getCol() * 32) / 2.0f + 112;
-    float pausePlayButtonY = (board.getRow() * 32) + 16;
+    float pausePlayButtonX = (board.getCol() * 32) - 240;
+    float pausePlayButtonY = (board.getRow()+0.5) * 32;
     pausePlayButton.setPosition(pausePlayButtonX, pausePlayButtonY);
+
+    float debugButtonX = (board.getCol() * 32) - 304;
+    float debugButtonY = (board.getRow()+0.5) * 32;
+    debugButton.setPosition(debugButtonX, debugButtonY);
+}
+
+void Game::loadConfig(const string& configPath) {
+    std::ifstream configFile(configPath);
+
+    if (!configFile.is_open()) {
+        throw std::runtime_error("Failed to open config file: " + configPath);
+    }
+
+    configFile >> cols >> rows >> mines;
+
+    if (cols < 22 || rows < 16 || mines < 0 || mines > cols * rows) {
+        throw std::runtime_error("Invalid configuration values in config file");
+    }
+
+    configFile.close();
 }
 
 void Game::loadResources() {
@@ -39,6 +64,7 @@ void Game::loadResources() {
        !leaderBoardTexture.loadFromFile("files/images/leaderboard.png")||
        !pauseButtonTexture.loadFromFile("files/images/pause.png")||
        !playButtonTexture.loadFromFile("files/images/play.png")||
+       !debugButtonTexture.loadFromFile("files/images/debug.png")||
        !font.loadFromFile("files/font.ttf")) {
         cerr << "Failed to load resources!" << endl;
         exit(1);
@@ -58,6 +84,7 @@ void Game::loadResources() {
     happyFaceButton.setTexture(happyFaceTexture);
     leaderBoardButton.setTexture(leaderBoardTexture);
     pausePlayButton.setTexture(pauseButtonTexture);
+    debugButton.setTexture(debugButtonTexture);
 }
 
 void Game::run() {
@@ -70,6 +97,7 @@ void Game::run() {
 
     while(window.isOpen()) {
         handleEvents();
+        handleLeaderboardWindowEvents();
         update();
         render();
     }
@@ -107,8 +135,15 @@ void Game::handleEvents() {
                     }
                     else {
                         pausePlayButton.setTexture(pauseButtonTexture);
-                        pausedDuration = chrono::duration_cast<chrono::seconds>(chrono::steady_clock::now() - pauseStartTime);
+                        pausedDuration += chrono::duration_cast<chrono::seconds>(chrono::steady_clock::now() - pauseStartTime);
                     }
+                }
+                return;
+            }
+
+            if (debugButton.getGlobalBounds().contains(mouseX, mouseY)) {
+                if (!isVictory && !board.isGameOver()) {
+                    isDebugMode = !isDebugMode;
                 }
                 return;
             }
@@ -119,7 +154,18 @@ void Game::handleEvents() {
             }
 
             if (leaderBoardButton.getGlobalBounds().contains(mouseX, mouseY)) {
-                showLeaderBoard();
+                if (isLeaderBoardOpen) {
+                    leaderboardWindow.close();
+                    isLeaderBoardOpen = false;
+                    if(!isVictory && !board.isGameOver()) {
+                        isPaused = false;
+                        pausedDuration += chrono::duration_cast<chrono::seconds>(chrono::steady_clock::now() - pauseStartTime);
+                    }
+                } else {
+                    leaderboardWindow.create(sf::VideoMode(300, 400), "Minesweeper Leaderboard");
+                    isLeaderBoardOpen = true;
+                    showLeaderBoard();
+                }
                 return;
             }
 
@@ -171,28 +217,10 @@ void Game::drawNumber(int number, int xPosition, int yPosition, int digitCount, 
 }
 
 void Game::showLeaderBoard() {
-    isLeaderBoardOpen = true;
     isPaused = true;
     pauseStartTime = chrono::steady_clock::now();
 
-    for (int row = 0; row < board.getRow(); row++) {
-        for (int col = 0; col < board.getCol(); col++) {
-            sf::Sprite tileSprite;
-            tileSprite.setTexture(revealedTexture);
-            tileSprite.setPosition(col * tileSize, row * tileSize);
-            window.draw(tileSprite);
-        }
-    }
-    if (isVictory) {
-        happyFaceButton.setTexture(winFaceTexture);
-        window.draw(happyFaceButton);
-    }
-
-    window.display();
-
-    sf::RenderWindow leaderboardWindow(sf::VideoMode(300, 400), "Minesweeper");
     font.loadFromFile("files/font.ttf");
-
     vector<pair<string, string>> leaderboard;
     ifstream infile(leaderboardFile);
     string time, name;
@@ -201,20 +229,12 @@ void Game::showLeaderBoard() {
         leaderboard.emplace_back(time, name);
     }
     infile.close();
-
     sort(leaderboard.begin(), leaderboard.end());
 
     vector<sf::Text> entries;
-    for (int i = 0; i < 5; i++) {
-
+    for (int i = 0; i < leaderboard.size() && i < 5; i++) {
         ostringstream formattedEntry;
-        if(leaderboard[i].second == playerName && isVictory) {
-            formattedEntry << i+1 << ".   " << leaderboard[i].first << "   " << leaderboard[i].second << "*";
-        }
-        else {
-            formattedEntry << i+2 << ".   " << leaderboard[i].first << "   " << leaderboard[i].second;
-        }
-
+        formattedEntry << i + 1 << ". " << leaderboard[i].first << " " << leaderboard[i].second;
         sf::Text text(formattedEntry.str(), font, 20);
         text.setFillColor(sf::Color::White);
         text.setPosition(40, 80 + i * 40);
@@ -229,26 +249,30 @@ void Game::showLeaderBoard() {
     sf::RectangleShape background(sf::Vector2f(300, 400));
     background.setFillColor(sf::Color(0, 0, 255));
 
-    while (leaderboardWindow.isOpen()) {
+    leaderboardWindow.clear();
+    leaderboardWindow.draw(background);
+    leaderboardWindow.draw(title);
+    for (const auto& entry : entries) {
+        leaderboardWindow.draw(entry);
+    }
+    leaderboardWindow.display();
+}
+
+void Game::handleLeaderboardWindowEvents() {
+    if (isLeaderBoardOpen) {
         sf::Event event;
         while (leaderboardWindow.pollEvent(event)) {
             if (event.type == sf::Event::Closed) {
                 leaderboardWindow.close();
+                isLeaderBoardOpen = false;
+
+                if (!isVictory && !board.isGameOver()) {
+                    isPaused = false;
+                    pausedDuration += chrono::duration_cast<chrono::seconds>(chrono::steady_clock::now() - pauseStartTime);
+                }
             }
         }
-
-        leaderboardWindow.clear();
-        leaderboardWindow.draw(background);
-        leaderboardWindow.draw(title);
-        for (int i = 0; i < entries.size(); i++) {
-            leaderboardWindow.draw(entries[i]);
-        }
-        leaderboardWindow.display();
     }
-
-    isLeaderBoardOpen = false;
-    isPaused = false;
-    pausedDuration += chrono::duration_cast<chrono::seconds>(chrono::steady_clock::now() - pauseStartTime);
 }
 
 void Game::textToFile() {
@@ -358,7 +382,7 @@ void Game::render() {
                     flagSprite.setPosition(col * tileSize, row * tileSize);
                     window.draw(flagSprite);
                 }
-                if (board.isGameOver() && tile.hasMine()) {
+                if ((board.isGameOver() || isDebugMode) && tile.hasMine()) {
                     sf::Sprite mineSprite;
                     mineSprite.setTexture(mineTexture);
                     mineSprite.setPosition(col * tileSize, row * tileSize);
@@ -400,27 +424,6 @@ void Game::render() {
     window.draw(happyFaceButton);
     window.draw(leaderBoardButton);
     window.draw(pausePlayButton);
+    window.draw(debugButton);
     window.display();
 }
-
-
-// class Game {
-// private:
-//     Board board;
-//     int tileSize;
-//     bool isPaused;
-//     vector<sf::Texture> numberTextures;
-//     sf::Texture hiddenTexture, revealedTexture, mineTexture, flagTexture, digitsTexture;
-//     sf::Font font;
-//     sf::Clock gameClock;
-//     sf::RenderWindow window;
-//
-//     void handleEvents();
-//     void update();
-//     void render();
-//     void loadResources();
-//
-// public:
-//     Game();
-//     void run();
-// };

@@ -11,6 +11,9 @@
 class Game {
 private:
     Board board;
+    int rows;
+    int cols;
+    int mines;
     int tileSize;
     int minutesX;
     int secondsX;
@@ -20,6 +23,7 @@ private:
     bool isVictory;
     bool isLeaderBoardOpen;
     bool isManuallyPaused;
+    bool isDebugMode;
     string playerName;
     string leaderboardFile = "files/leaderboard.txt";
 
@@ -29,13 +33,15 @@ private:
 
     vector<sf::Texture> numberTextures;
     sf::Texture hiddenTexture, revealedTexture, mineTexture, flagTexture, digitsTexture, happyFaceTexture,
-                loseFaceTexture, winFaceTexture, leaderBoardTexture, pauseButtonTexture, playButtonTexture;
+                loseFaceTexture, winFaceTexture, leaderBoardTexture, pauseButtonTexture, playButtonTexture,
+                debugButtonTexture;
     sf::Font font;
     sf::RenderWindow window;
-    sf::Sprite createDigitSprite(int digit, int xPosition, int yPosition);
+    sf::RenderWindow leaderboardWindow;
     sf::Sprite happyFaceButton;
     sf::Sprite leaderBoardButton;
     sf::Sprite pausePlayButton;
+    sf::Sprite debugButton;
 
     void handleEvents();
     void update();
@@ -45,8 +51,8 @@ private:
     void resetGame();
     void showLeaderBoard();
     void textToFile();
-
-
+    void handleLeaderboardWindowEvents();
+    void loadConfig(const string& configPath);
 
 public:
     Game();

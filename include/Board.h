@@ -9,16 +9,17 @@ using namespace std;
 class Board {
 private:
     vector<vector<Tile>> tiles;
-    int numRows;
-    int numCols;
-    int numMines;
+    int numRows = 16;
+    int numCols = 25;
+    int numMines = 50;
     int flagCount;
     bool gameOver;
     bool victory;
 
 public:
-    Board(int rows, int cols, int mines);
-    void initializeBoard();
+    Board();
+
+    void initializeBoard(int rows, int cols, int mines);
     int getRow();
     int getCol();
     int getRemainingMines();
@@ -28,7 +29,6 @@ public:
     void reset();
     bool checkVictory();
     bool isGameOver();
-    void printBoard(bool debugMode) const;
 
     Tile& getTile(int row, int col);
 };

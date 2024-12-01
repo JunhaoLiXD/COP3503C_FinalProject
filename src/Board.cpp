@@ -3,10 +3,12 @@
 #include <iostream>
 #include<random>
 
-Board::Board(const int rows, const int cols, const int mines):
-numRows(rows), numCols(cols), numMines(mines), flagCount(0), gameOver(false), victory(false) {initializeBoard();}
+Board::Board() : flagCount(0), gameOver(false), victory(false) {}
 
-void Board::initializeBoard() {
+void Board::initializeBoard(int rows, int cols, int mines) {
+    numRows = rows;
+    numCols = cols;
+    numMines = mines;
     tiles = vector<vector<Tile>>(numRows, vector<Tile>(numCols));
 
     int minesPlaced = 0;
@@ -126,65 +128,8 @@ bool Board::isGameOver() {
 
 void Board::reset() {
     tiles.clear();
-    initializeBoard();
+    initializeBoard(numRows, numCols, numMines);
     flagCount = 0;
     gameOver = false;
     victory = false;
 }
-
-void Board::printBoard(bool debugMode) const {
-    for (int row = 0; row < numRows; row++) {
-        for (int col = 0; col < numCols; col++) {
-            const Tile& tile = tiles[row][col];
-
-            if (debugMode && tile.hasMine()) {
-                std::cout << "M ";
-            }
-            else if (!tile.isTileRevealed()) {
-                if (tile.isTileFlagged()) {
-                    std::cout << "F ";
-                }
-                else {
-                    std::cout << ". ";
-                }
-            }
-            else {
-                if (tile.hasMine()) {
-                    std::cout << "M ";
-                }
-                else if (tile.getAdjacentMines() == 0) {
-                    std::cout << "  ";
-                }
-                else {
-                    std::cout << tile.getAdjacentMines() << " ";
-                }
-            }
-        }
-        std::cout << std::endl;
-    }
-}
-
-
-// class Board {
-// private:
-//     vector<vector<Tile>> tiles;
-//     int numRows;
-//     int numCols;
-//     int numMines;
-//
-//     bool gameOver;
-//     bool victory;
-//
-// public:
-//     Board(int rows, int cols, int mines);
-//     void initializeBoard();
-//     int getRow();
-//     int getCol();
-//     Tile& getTile(int row, int col);
-//     bool revealTile(int row, int col);
-//     void toggleFlag(int row, int col);
-//     void calculateAdjacentMines();
-//     void reset();
-//     bool checkVictory();
-//     void printBoard(bool debugMode) const;
-// };
