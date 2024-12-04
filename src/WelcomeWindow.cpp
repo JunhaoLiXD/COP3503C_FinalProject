@@ -105,20 +105,3 @@ void WelcomeWindow::render() {
     window.display();
 }
 
-
-// class WelcomeWindow {
-// private:
-//     sf::RenderWindow window;
-//     sf::Font font;
-//     sf::Text inputText;
-//     sf::Text cursorText;
-//     string userInput;
-//     string cursor;
-//
-//     void WelcomeWindow::handleEvents();
-//     void render();
-//
-// public:
-//     WelcomeWindow();
-//     string run();
-// };

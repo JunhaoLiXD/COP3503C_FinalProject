@@ -9,7 +9,7 @@
 using namespace std;
 
 Game::Game() : tileSize(32), isPaused(false), isVictory(false), isManuallyPaused(false), isDebugMode(false),
-                isLeaderBoardOpen(false), elapsedTime(0), pausedDuration(chrono::seconds(0)){
+                isLeaderBoardOpen(false), isNewRecord(false), elapsedTime(0), pausedDuration(chrono::seconds(0)){
 
     loadConfig("files/config.cfg");
 
@@ -108,6 +108,7 @@ void Game::resetGame() {
     isPaused = false;
     isManuallyPaused = false;
     isVictory = false;
+    isNewRecord = false;
     elapsedTime = 0;
     startTime = chrono::steady_clock::now();
     pausedDuration = chrono::seconds(0);
@@ -223,10 +224,15 @@ void Game::showLeaderBoard() {
     font.loadFromFile("files/font.ttf");
     vector<pair<string, string>> leaderboard;
     ifstream infile(leaderboardFile);
-    string time, name;
+    string line;
 
-    while (infile >> time >> name) {
-        leaderboard.emplace_back(time, name);
+    while (getline(infile, line)) {
+        size_t commaPos = line.find(',');
+        if (commaPos != string::npos) {
+            string time = line.substr(0, commaPos);
+            string name = line.substr(commaPos + 1);
+            leaderboard.emplace_back(time, name);
+        }
     }
     infile.close();
     sort(leaderboard.begin(), leaderboard.end());
@@ -234,7 +240,12 @@ void Game::showLeaderBoard() {
     vector<sf::Text> entries;
     for (int i = 0; i < leaderboard.size() && i < 5; i++) {
         ostringstream formattedEntry;
-        formattedEntry << i + 1 << ". " << leaderboard[i].first << " " << leaderboard[i].second;
+        if(leaderboard[i].second == playerName && isNewRecord) {
+            formattedEntry << i + 1 << ". " << leaderboard[i].first << " " << leaderboard[i].second << "*";
+        }
+        else {
+            formattedEntry << i + 1 << ". " << leaderboard[i].first << " " << leaderboard[i].second;
+        }
         sf::Text text(formattedEntry.str(), font, 20);
         text.setFillColor(sf::Color::White);
         text.setPosition(40, 80 + i * 40);
@@ -285,10 +296,15 @@ void Game::textToFile() {
     vector<pair<string, string>> leaderboard;
 
     ifstream infile(leaderboardFile);
+    string line;
     if (infile.is_open()) {
-        string time, name;
-        while (infile >> time >> name) {
-            leaderboard.emplace_back(time, name);
+        while (getline(infile, line)) {
+            size_t commaPos = line.find(',');
+            if (commaPos != string::npos) {
+                string time = line.substr(0, commaPos);
+                string name = line.substr(commaPos + 1);
+                leaderboard.emplace_back(time, name);
+            }
         }
         infile.close();
     } else {
@@ -300,6 +316,7 @@ void Game::textToFile() {
         if (entry.second == playerName) {
             if (formattedTime.str() < entry.first) {
                 entry.first = formattedTime.str();
+                isNewRecord = true;
             }
             updated = true;
             break;
@@ -308,6 +325,7 @@ void Game::textToFile() {
 
     if (!updated) {
         leaderboard.emplace_back(formattedTime.str(), playerName);
+        isNewRecord = true;
     }
 
     sort(leaderboard.begin(), leaderboard.end(), [](const pair<string, string>& a, const pair<string, string>& b) {
@@ -319,7 +337,7 @@ void Game::textToFile() {
         int count = 0;
         for (const auto& entry : leaderboard) {
             if (count++ >= 5) break;
-            outfile << entry.first << " " << entry.second << endl;
+            outfile << entry.first << "," << entry.second << endl;
         }
         outfile.close();
     } else {
@@ -344,6 +362,9 @@ void Game::update() {
     if(board.checkVictory()) {
         isPaused = true;
         isVictory = true;
+        happyFaceButton.setTexture(winFaceTexture);
+        leaderboardWindow.create(sf::VideoMode(300, 400), "Minesweeper Leaderboard");
+        isLeaderBoardOpen = true;
         textToFile();
         showLeaderBoard();
         return;
@@ -371,7 +392,12 @@ void Game::render() {
             sf::Sprite tileSprite;
             const Tile& tile = board.getTile(row, col);
 
-            if (!tile.isTileRevealed()) {
+            if (isManuallyPaused) {
+                tileSprite.setTexture(revealedTexture);
+                tileSprite.setPosition(col * tileSize, row * tileSize);
+                window.draw(tileSprite);
+            }
+            else if (!tile.isTileRevealed()) {
                 tileSprite.setTexture(hiddenTexture);
                 tileSprite.setPosition(col * tileSize, row * tileSize);
                 window.draw(tileSprite);

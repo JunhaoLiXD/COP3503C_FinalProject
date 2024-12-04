@@ -24,6 +24,7 @@ private:
     bool isLeaderBoardOpen;
     bool isManuallyPaused;
     bool isDebugMode;
+    bool isNewRecord;
     string playerName;
     string leaderboardFile = "files/leaderboard.txt";
 

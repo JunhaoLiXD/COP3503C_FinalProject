@@ -27,6 +27,4 @@ public:
     void toggleFlag();
 };
 
-
-
 #endif //TILE_H

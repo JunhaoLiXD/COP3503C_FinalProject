@@ -33,6 +33,4 @@ public:
     Tile& getTile(int row, int col);
 };
 
-
-
 #endif //BOARD_H

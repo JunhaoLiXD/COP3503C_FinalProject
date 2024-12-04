@@ -25,4 +25,4 @@ public:
     string run();
 };
 
-#endif //WELCOMEWINDOW_H
+#endif
